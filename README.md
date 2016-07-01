@@ -1,2 +1,2 @@
 # botcat
-Redirects stdin to a Telegram channel or channel
+Redirects stdin to a Telegram channel or chat
