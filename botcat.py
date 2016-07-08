@@ -51,7 +51,7 @@ def parse_command_line():
                         choices=("HTML", "Markdown"))
     parser.add_argument("-s", "--split-newlines", help="If specified, each "
                                                        "input line will be "
-                                                       "send as an individual "
+                                                       "sent as an individual "
                                                        "message.",
                         action="store_true")
     parser.add_argument("-r", "--retries", help="How many times a failed send "
