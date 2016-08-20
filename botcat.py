@@ -5,7 +5,7 @@ import sys
 import argparse
 import asyncio
 import traceback
-import telepot.async as telepot_async
+import telepot.aio
 from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
 
@@ -89,7 +89,7 @@ async def send_message(bot, args, message):
 
 async def transfer_stdin(loop, args):
     reader = Reader(loop, sys.stdin)
-    bot = telepot_async.Bot(args.token, loop=loop)
+    bot = telepot.aio.Bot(args.token, loop=loop)
 
     # If we don't need line-by-line output, go the easy way
     if not args.split_newlines:
