@@ -1,13 +1,32 @@
 #!/usr/bin/env python3
 
 
-import sys
 import argparse
 import asyncio
+import io
+import sys
 import traceback
-import telepot.aio
-from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
+
+import telepot.aio
+
+
+def media_wrapper(func):
+    async def wrapper(bot, chat_id, media, *args, **kwargs):
+        with io.BytesIO(media) as stream:
+            return await func(bot, chat_id, stream, *args, **kwargs)
+    return wrapper
+
+
+MESSAGE_TYPES = {
+    "text": telepot.aio.Bot.sendMessage,
+    "photo": media_wrapper(telepot.aio.Bot.sendPhoto),
+    "audio": media_wrapper(telepot.aio.Bot.sendAudio),
+    "document": media_wrapper(telepot.aio.Bot.sendDocument),
+    "video": media_wrapper(telepot.aio.Bot.sendVideo),
+    "voice": media_wrapper(telepot.aio.Bot.sendVoice)
+}
 
 
 class Reader:
@@ -46,6 +65,10 @@ def parse_command_line():
                                                  "Telegram channel or chat.")
     parser.add_argument("token", help="API token of the Telegram bot.")
     parser.add_argument("channel", help="Chat ID or channel for broadcasts.")
+    parser.add_argument("--type", help="Type of message to send. " +
+                                       "(Defaults to %(default)s.)",
+                        choices=MESSAGE_TYPES.keys(),
+                        default="text")
     parser.add_argument("-m", "--parse-mode", help="How the input should be "
                                                    "parsed.",
                         choices=("HTML", "Markdown"))
@@ -64,13 +87,14 @@ def parse_command_line():
     return parser.parse_args()
 
 
-async def send_message(bot, args, message):
+async def send_message(bot, args, message, **kwargs):
     retries = args.retries
     while True:
         try:
-            await bot.sendMessage(args.channel,
-                                  message,
-                                  parse_mode=args.parse_mode)
+            await MESSAGE_TYPES[args.type](bot,
+                                           args.channel,
+                                           message,
+                                           **kwargs)
         except:
             traceback.print_exc()
 
@@ -88,17 +112,28 @@ async def send_message(bot, args, message):
 
 
 async def transfer_stdin(loop, args):
-    reader = Reader(loop, sys.stdin)
     bot = telepot.aio.Bot(args.token, loop=loop)
+
+    # If we are not dealing with text, read everything from stdin as binary,
+    # and send away.
+    if args.type != "text":
+        data = sys.stdin.buffer.read()
+        await send_message(bot, args, data)
+        return
+
+    reader = Reader(loop, sys.stdin)
 
     # If we don't need line-by-line output, go the easy way
     if not args.split_newlines:
-        await send_message(bot, args, await reader.read())
+        await send_message(bot,
+                           args,
+                           await reader.read(),
+                           parse_mode=args.parse_mode)
         return
 
     # Go the hard way
     async for line in reader:
-        await send_message(bot, args, line)
+        await send_message(bot, args, line, parse_mode=args.parse_mode)
 
 
 def main():
